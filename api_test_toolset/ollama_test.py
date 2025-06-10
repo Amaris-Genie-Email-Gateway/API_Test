@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class OllamaModelTester:
     """
-    A class for testing the reachability of models served by a local Ollama instance.
+    A class for testing the reachability of models served by a local Ollama instance using /api/generate.
     """
 
     def __init__(self, api_base_url: str, prompt: str, test_models: Optional[List[str]] = None):
@@ -22,7 +22,7 @@ class OllamaModelTester:
             ValueError: If no models are found on the server or invalid test_models are provided.
         """
         self.api_base_url = api_base_url.rstrip("/")
-        self.chat_url = f"{self.api_base_url}/api/chat"
+        self.generate_url = f"{self.api_base_url}/api/generate"
         self.models_url = f"{self.api_base_url}/api/tags"
         self.prompt = prompt
         self.models: List[str] = []
@@ -66,7 +66,7 @@ class OllamaModelTester:
 
     def _build_payload(self, model_name: str) -> Dict[str, Any]:
         """
-        Construct the payload for chat API request.
+        Construct the payload for generate API request.
 
         Args:
             model_name (str): Name of the model to query.
@@ -77,14 +77,12 @@ class OllamaModelTester:
         return {
             "model": model_name,
             "stream": False,
-            "messages": [
-                {"role": "user", "content": self.prompt}
-            ]
+            "prompt": self.prompt
         }
 
     def test_model(self, model_name: str) -> None:
         """
-        Send a chat request to the specified model and print the result.
+        Send a generate request to the specified model and print the result.
 
         Args:
             model_name (str): Name of the model to test.
@@ -93,10 +91,10 @@ class OllamaModelTester:
         payload = self._build_payload(model_name)
 
         try:
-            response = requests.post(self.chat_url, json=payload, timeout=300)
+            response = requests.post(self.generate_url, json=payload, timeout=300)
             response.raise_for_status()
             result = response.json()
-            content = result.get("message", {}).get("content", "[No content returned]")
+            content = result.get("response", "[No response field returned]")
             print(f"{model_name}: Model is reachable.")
             print(f"Response: {content}")
         except requests.exceptions.RequestException as e:
@@ -131,13 +129,16 @@ class OllamaModelTester:
 # Entry point example usage
 if __name__ == "__main__":
     try:
-        # Replace with your actual endpoint and prompt
-        test_models=[
+        test_models = [
             "hf.co/unsloth/Qwen3-14B-GGUF:Q4_K_M",
             "hf.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:Q4_K_M",
             "cyberllm-02:latest"
-            ]
-        tester = OllamaModelTester(api_base_url="http://192.168.1.21:11434", prompt="Hello, who are you?",test_models=test_models)
+        ]
+        tester = OllamaModelTester(
+            api_base_url="http://192.168.1.21:11434",
+            prompt="Hello, who are you?",
+            test_models=test_models
+        )
         tester.run_concurrent_test()
     except (ConnectionError, ValueError) as e:
         print(f"Initialization failed: {e}")
